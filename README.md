@@ -1,39 +1,24 @@
-XRHUDAPP
+# XRHUDAPP – Android Companion for XRHUD  
 
-A small AOSP-compatible Android companion app for XRHUD.
+A tiny, AOSP‑compatible Android app that reads the phone’s GPS location and speed, then streams the data over UDP to the XRHUD host (`hud_app.py`) running on a Steam Deck.
 
-XRHUDAPP reads the phone's GPS location and GPS-derived speed, then sends the data over UDP to the XRHUD host running hud_app.py.
+---  
 
-How It Works
-┌────────────────────┐
-│    Android Phone   │
-│                    │
-│   GPS + Speed      │
-│                    │
-│     XRHUDAPP       │
-└─────────┬──────────┘
-          │
-          │ UDP / JSON
-          │ Port 8676
-          ▼
-┌────────────────────┐
-│    XRHUD Host      │
-│    Steam Deck      │
-│                    │
-│     hud_app.py     │
-└─────────┬──────────┘
-          │
-          ├── GPS / Location
-          │
-          └── Speed
+## How It Works  
 
+1. **Phone side** – XRHUDAPP fetches latitude, longitude, speed, satellite count and HDOP from Android’s native `LocationManager`.  
+2. **Transmission** – The data is packed into a JSON message and sent via UDP to the XRHUD host on **port 8676**.  
+3. **Deck side** – `hud_app.py` receives the packets, converts the speed to the user‑selected unit (km/h or mph) and overlays the information on the Xreal Air HUD.  
 
-The phone sends GPS data directly to the configured target IP on UDP port 8676.
+```
+Phone (XRHUDAPP) ──► UDP JSON (port 8676) ──► Steam Deck (hud_app.py)
+```
 
-Packet Format
+---  
 
-XRHUDAPP sends JSON packets similar to:
+## Packet Format  
 
+```json
 {
   "lat": 51.5073,
   "lon": -0.1277,
@@ -41,225 +26,145 @@ XRHUDAPP sends JSON packets similar to:
   "sats": 18,
   "hdop": "-"
 }
+```
 
+| Field | Meaning |
+|-------|---------|
+| **lat**   | Latitude in decimal degrees |
+| **lon**   | Longitude in decimal degrees |
+| **speed** | GPS speed in metres per second (converted by XRHUD) |
+| **sats**  | Number of satellites used for the fix |
+| **hdop**  | Horizontal Dilution of Precision (may be “‑”) |
 
-Where:
+---  
 
-Field	Description
-lat	Latitude in decimal degrees
-lon	Longitude in decimal degrees
-speed	GPS speed in metres per second
-sats	Satellites currently used in the fix
-hdop	HDOP value, where available
+## Requirements  
 
-The speed value is supplied in m/s. XRHUD converts it to km/h or mph for display.
+| Requirement | Minimum |
+|-------------|---------|
+| Android device with GPS | Android 8.0 (API 26) or newer |
+| Network | Phone and Steam Deck must share the same LAN (a Wi‑Fi hotspot works) |
+| XRHUD host | `hud_app.py` running and listening on UDP **8676** |
+| Google Play Services | **Not required** – the app uses the built‑in `LocationManager` |
 
-Requirements
+---  
 
-Android phone with GPS
+## Building the APK  
 
-Android 8.0+ / API 26+
+### Prerequisites  
 
-Network connection between the phone and XRHUD host
+* Android SDK Platform 35  
+* Android Build Tools (latest)  
+* Command‑line tools (`sdkmanager`, `avdmanager`, …)  
+* **Java 21**  
+* **Gradle 8.9**  
 
-XRHUD running on the target machine
+### Build steps  
 
-The app uses Android's native LocationManager and does not require Google Play Services.
-
-Building
-Android SDK
-
-Install:
-
-Android SDK Platform 35
-
-Android Build Tools
-
-Android command-line tools
-
-Java and Gradle
-
-The project is built using:
-
-Java 21
-
-Gradle 8.9
-
-Build the debug APK with:
-
+```bash
+# From the repository root
 /opt/gradle/gradle-8.9/bin/gradle assembleDebug
+```
 
+The debug APK will be generated at  
 
-The APK will be generated at:
-
+```
 app/build/outputs/apk/debug/app-debug.apk
+```
 
-Install with ADB
+---  
 
-Connect the Android phone with USB debugging enabled:
+## Installing with ADB  
 
+```bash
+# 1. Enable “USB debugging” on the phone.
+# 2. Connect the phone via USB.
 adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
-Usage
+The app is now installed and ready to launch.
 
-Connect the phone and XRHUD host to the same network.
+---  
 
-Start hud_app.py on the XRHUD host.
+## Running the App  
 
-Find the XRHUD host's IP address.
+1. **Network** – Put the phone and Steam Deck on the same Wi‑Fi network (e.g., enable a hotspot on the phone).  
+2. **Start XRHUD** – Run `hud_app.py` on the Deck and note its IP address.  
+3. **Configure XRHUDAPP** – Open the app, enter the Deck’s IP, and grant **Precise location** permission.  
+4. **Activate GPS** – Tap **START GPS**.  
+5. The app will begin sending UDP packets to `<XRHUD_HOST_IP>:8676`.  
 
-Enter the host IP into XRHUDAPP.
+### Verifying the connection (on the Deck)
 
-Grant precise location permission.
-
-Press START GPS.
-
-The app sends packets to:
-
-<XRHUD_HOST_IP>:8676
-
-Example Network
-
-A phone hotspot can be used as the network:
-
-┌────────────────────┐
-│    Android Phone   │
-│                    │
-│   Wi-Fi Hotspot    │
-│   GPS + XRHUDAPP   │
-└─────────┬──────────┘
-          │
-          │ Wi-Fi
-          ▼
-┌────────────────────┐
-│    Steam Deck      │
-│                    │
-│    hud_app.py      │
-│    UDP :8676       │
-└────────────────────┘
-
-
-The XRHUD host's IP address is entered into the Android app.
-
-Network Behavior
-
-XRHUDAPP is not a broadcast service.
-
-It sends UDP packets only to the IP address entered by the user:
-
-<XRHUD_HOST_IP>:8676
-
-
-It does not send GPS data to every device on the network.
-
-Verifying the Connection
-
-On the XRHUD host, listen for UDP packets:
-
+```bash
+# Listen for incoming packets
 sudo tcpdump -ni any udp port 8676
 
-
-When XRHUDAPP is running and has a GPS fix, packets should appear.
-
-You can also check whether XRHUD is listening on the expected port:
-
+# Or check the listening socket
 ss -lunp | grep 8676
+```
 
-GPS Data
+You should see a steady stream of JSON packets whenever the phone has a GPS fix.
 
-XRHUDAPP provides:
+---  
 
-Latitude
+## Network Behaviour  
 
-Longitude
+* **Unicast only** – XRHUDAPP sends packets solely to the IP you entered; no broadcast traffic.  
+* **Port** – Fixed at **8676**; the host must listen on this port.  
 
-GPS-derived speed
+---  
 
-Satellites used in the GPS fix
+## GPS Data Details  
 
-GPS speed is taken directly from Android's Location data.
+* **Latitude / Longitude** – Decimal degrees from the GPS fix.  
+* **Speed** – Directly taken from the GPS sensor (m / s); not derived from accelerometer integration, so no drift.  
+* **Satellites / HDOP** – Optional fields that give fix quality information.  
 
-It is not calculated by integrating accelerometer data.
+---  
 
-This avoids the accumulated drift that occurs when trying to derive vehicle speed from an accelerometer alone.
+## Integration Overview  
 
-XRHUD Integration
+```
+Android Phone (XRHUDAPP) ──► UDP 8676 ──► Steam Deck (hud_app.py)
+      │                     │
+      ├─► Latitude          ├─► HUD overlay
+      ├─► Longitude         ├─► Unit conversion (km/h ↔ mph)
+      ├─► Speed (m/s)       └─► Combined with IMU data
+      └─► Sat / HDOP
+```
 
-The system separates the phone's GPS system from the Xreal Air IMU.
+*The XRHUD host handles head orientation, G‑force calculation, HUD rendering, and speed‑unit conversion. The phone supplies only positional and speed data, keeping the two sensor streams independent.*
 
-             XRHUD SYSTEM
-                  │
-       ┌──────────┴──────────┐
-       │                     │
-       ▼                     ▼
- Android GPS             Xreal Air IMU
-       │                     │
-       │                     ├── Orientation
-       │                     ├── Pitch / Bank
-       │                     └── G-force
-       │
-       ├── Location
-       └── Speed
-       │
-       └──────────┐
-                  ▼
-              hud_app.py
-                  │
-                  ▼
-             Xreal Air HUD
+---  
 
-Android Phone
+## Project Structure  
 
-The phone handles:
-
-GPS location
-
-GPS-derived speed
-
-Satellite information
-
-UDP transmission
-
-XRHUD Host / IMU
-
-The XRHUD host handles:
-
-Head orientation
-
-Accelerometer/G-force data
-
-HUD rendering
-
-Speed unit conversion
-
-GPS display
-
-This keeps the IMU-based G-force measurement independent from GPS speed.
-
-Project Structure
+```
 XRHUDAPP/
-├── app/
-│   ├── build.gradle
-│   └── src/
-│       └── main/
-│           ├── AndroidManifest.xml
-│           └── java/
-│               └── com/
-│                   └── xrhud/
-│                       └── phone/
-│                           ├── GpsService.java
-│                           └── MainActivity.java
-├── build.gradle
-└── settings.gradle
+├─ app/
+│  ├─ build.gradle
+│  └─ src/
+│     └─ main/
+│        ├─ AndroidManifest.xml
+│        └─ java/
+│           └─ com/
+│              └─ xrhud/
+│                 └─ phone/
+│                    ├─ GpsService.java
+│                    └─ MainActivity.java
+├─ build.gradle
+└─ settings.gradle
+```
 
-Related Project
+---  
 
-XRHUDAPP is designed to work with the main XRHUD project:
+## Related Project  
 
-XRHUD: https://github.com/3x65Fork1/XRHUD
+* **XRHUD (Steam Deck HUD)** – https://github.com/3x65Fork1/XRHUD  
 
-License
+---  
 
-This project is licensed under the MIT License.
+## License  
 
-You are free to use, copy, modify, merge, publish, distribute, sublicense, and sell this software, provided that the original copyright notice and license are retained.
+MIT License – you may use, copy, modify, merge, publish, distribute, sublicense, and sell this software, provided the original copyright notice and license are retained.
